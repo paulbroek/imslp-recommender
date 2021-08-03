@@ -136,7 +136,10 @@ def extract_download_count(Id=None, composer=None, data=None) -> Optional[int]:
     ahrefs = soup('a', href=True)
 
     # is there a quicker way than this?
-    ahref_title_matches = [a for a in ahrefs if a.get('title', '').startswith('Special:GetFCtrStats')]
+    #ahref_title_matches = [a for a in ahrefs if a.get('title', '').startswith(a_title)]
+
+    # better?
+    ahref_title_matches = soup.find_all(lambda tag: tag.name =='a' and tag.get('title', '').startswith(a_title))
 
     lahref = len(ahref_title_matches)
     # multiple matches: just create a list, and later a dict, look up the version names
@@ -155,7 +158,7 @@ def extract_download_count(Id=None, composer=None, data=None) -> Optional[int]:
             dcount = int(dcount)
 
         except Exception as e:
-            logger.error(f'cannot parse download count text: {dcount}, {Id=}')
+            logger.error(f'cannot parse download count text: {dcount}, {Id=} {str(e)=}')
 
         dcounts.append(dcount)
 
@@ -165,7 +168,7 @@ def extract_download_count(Id=None, composer=None, data=None) -> Optional[int]:
 def extract_batch_dcounts(data: dict, ids=None, n=100):
     # test on a sample of ids
     if ids is None:
-        ids = random.sample(list(data.keys()), 100)
+        ids = random.sample(list(data.keys()), n)
 
     #ids = [i[0] for i in ids]
 
