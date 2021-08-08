@@ -1,6 +1,11 @@
 """ use IMSLP API to get a list of works using a page Id 
 
     other repo, that uses the mediawiki api: https://github.com/jlumbroso/imslp
+
+    run script:
+
+        conda activate py39
+        ipy get_works_list.py -i
 """
 
 from typing import Dict, Any, Optional
@@ -10,6 +15,7 @@ import logging
 from urllib3 import PoolManager, request
 import bs4 as bs
 from time import sleep
+import aiohttp
 import asyncio
 from yapic import json
 import tqdm
@@ -17,6 +23,7 @@ import tqdm
 # easy for filtering out composers
 import imslp # https://github.com/jlumbroso/imslp
 
+from rarc.utils.misc import chainGatherRes
 from rarc.utils.log import setup_logger, set_log_level, loggingLevelNames
 from rarc.redis_conn import rs
 
@@ -90,7 +97,7 @@ def save_redis(data, name=None) -> None:
     assert name is not None
     rcon.r.set(name, json.dumps(data))
 
-# my_data = get_redis('imslp_works_data')
+# data = get_redis('imslp_works_data')
 def get_redis(name=None) -> Dict[str, Dict[str, Any]]:
     assert name is not None
 
@@ -98,7 +105,7 @@ def get_redis(name=None) -> Dict[str, Dict[str, Any]]:
     return json.loads(d)
 
 # ldata = list(data.items())
-# dcount = extract_download_count(id=ldata[1000][0], data=data)
+# dcount = extract_download_count(Id=ldata[1000][0], data=data)
 def extract_download_count(Id=None, composer=None, data=None) -> Optional[int]:
     """ extract download count from imslp html page
 
@@ -133,7 +140,7 @@ def extract_download_count(Id=None, composer=None, data=None) -> Optional[int]:
     r = manager.request('GET', url)
     soup = bs.BeautifulSoup(r.data)
     a_title = 'Special:GetFCtrStats' # /
-    ahrefs = soup('a', href=True)
+    #ahrefs = soup('a', href=True)
 
     # is there a quicker way than this?
     #ahref_title_matches = [a for a in ahrefs if a.get('title', '').startswith(a_title)]
@@ -164,8 +171,9 @@ def extract_download_count(Id=None, composer=None, data=None) -> Optional[int]:
 
     return dcounts
 
-# dcounts = extract_batch_dcounts(ldata, ids=None, n=100)
-def extract_batch_dcounts(data: dict, ids=None, n=100):
+# dcounts = extract_dcounts(data, ids=None, n=100)
+def extract_dcounts(data: dict, ids=None, n=100):
+    """ extract a batch of download counts, using a random sample """
     # test on a sample of ids
     if ids is None:
         ids = random.sample(list(data.keys()), n)
@@ -181,3 +189,66 @@ def extract_batch_dcounts(data: dict, ids=None, n=100):
         dcounts[i] = extract_download_count(Id=i, data=data)
 
     return dcounts
+
+async def aextract_download_count(Id=None, data=None):
+    """ extract download count asynchronously from imlsp html page using aiohttp """
+
+    pass 
+
+async def fetch(session, id, url) -> Dict[str, str]:
+    #with aiohttp.Timeout(10):
+    if 1:
+        async with session.get(url) as response:
+            return {id: await response.text()}
+
+async def fetch_all(session, urls: Dict[str, str], loop):
+    """ 
+        urls   dict of id keys and url values
+
+    """ 
+    results = await asyncio.gather(
+        *[fetch(session, id, url) for id, url in urls.items()],
+        return_exceptions=True  # default is false, that would raise
+    )
+
+    # for testing purposes only
+    # gather returns results in the order of coros
+    for idx, url in enumerate(urls):
+        print('{}: {}'.format(url, 'ERR' if isinstance(results[idx], Exception) else 'OK'))
+
+    # chain dictionaries into one
+    results = chainGatherRes(results)
+
+    return results
+
+async def aextract_dcounts(data: dict, ids=None, n=100):
+
+    if ids is None:
+        ids = random.sample(list(data.keys()), n)
+
+    urls = {i: data[i]['permlink'] for i in ids}
+
+    loop = asyncio.get_event_loop()
+
+    async with aiohttp.ClientSession(loop=loop) as session:
+        #ress = loop.run_until_complete(fetch_all(session, urls, loop))
+        ress = await fetch_all(session, urls, loop)
+        # async with session.get('http://httpbin.org/get') as resp:
+        #     print(resp.status)
+        #     print(await resp.text())
+
+    return ress
+
+
+if __name__ == "__main__":
+
+    try: 
+        data 
+    except NameError:
+        data = get_redis('imslp_works_data')
+
+        logger.info(f'got redis data, now running ')
+
+    ress = asyncio.run(aextract_dcounts(data, ids=None, n=5))
+
+    logger.info(f'{len(ress)=}')
