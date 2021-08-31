@@ -1,0 +1,5 @@
+future
+requests==2.22
+tqdm
+bs4
+yapic.json

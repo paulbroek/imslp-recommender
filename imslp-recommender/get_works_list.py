@@ -11,17 +11,16 @@
 from typing import Dict, Any, Optional
 import random
 import logging
-#import urllib3
-from urllib3 import PoolManager, request
-import bs4 as bs
-from time import sleep
-import aiohttp
+# from time import sleep
 import asyncio
+from urllib3 import PoolManager # , request
+import bs4 as bs
+import aiohttp
 from yapic import json
 import tqdm
 
 # easy for filtering out composers
-import imslp # https://github.com/jlumbroso/imslp
+# import imslp # https://github.com/jlumbroso/imslp
 
 from rarc.utils.misc import chainGatherRes
 from rarc.utils.log import setup_logger, set_log_level, loggingLevelNames
@@ -34,16 +33,9 @@ logger = setup_logger(cmdLevel=logging.INFO, saveFile=0, savePandas=0, color=1, 
 rcon = rs(home=0, db=4, decode=0)
 
 retformat = 'json'
-# http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type=1/start=0/retformat=<pretty|json|php|wddx>
 api_imslp = "http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type={}/start={}/retformat={}"
-# http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type=2/start=0/retformat=<pretty|json|php|wddx>
-#api_works = "http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type=2/start={}/retformat={}"
 
 manager = PoolManager(10)
-#r = manager.request('GET', 'http://google.com/')
-
-#for i in range(4):
-# keep polling as long as metadata.moreresultsavailable is True
 
 def get_imslp(api_type=2) -> Dict[str, Dict[str, Any]]:
     """ get 'people' (api_type=1) and/or 'works' (api_type=2) from IMSLP API 
@@ -72,7 +64,7 @@ def get_imslp(api_type=2) -> Dict[str, Dict[str, Any]]:
         except Exception as e: 
             logger.error(f'cannot parse data to json. {str(e)=}')
 
-        #reqs[i] = d
+        # reqs[i] = d
         # change ids to string ids: Category:Barbosa, Domingos Caldas
         catd = {d['id']: d for k,d in jsond.items() if 'id'  in d} # last metadata dict does not have 'id' key
         data |= catd
@@ -80,8 +72,8 @@ def get_imslp(api_type=2) -> Dict[str, Dict[str, Any]]:
         # update start for next fetch
         # last item is metadata
         # second last item is last data item
-        #kys = list(d.keys())
-        #start = 1 + int(kys[-2]) # gives string
+        # kys = list(d.keys())
+        # start = 1 + int(kys[-2]) # gives string
         start += 1 + len(catd)
         moreresultsavailable = list(jsond.values())[-1]['moreresultsavailable']
 
@@ -140,17 +132,17 @@ def extract_download_count(Id=None, composer=None, data=None) -> Optional[int]:
     r = manager.request('GET', url)
     soup = bs.BeautifulSoup(r.data)
     a_title = 'Special:GetFCtrStats' # /
-    #ahrefs = soup('a', href=True)
+    # ahrefs = soup('a', href=True)
 
     # is there a quicker way than this?
-    #ahref_title_matches = [a for a in ahrefs if a.get('title', '').startswith(a_title)]
+    # ahref_title_matches = [a for a in ahrefs if a.get('title', '').startswith(a_title)]
 
     # better?
     ahref_title_matches = soup.find_all(lambda tag: tag.name =='a' and tag.get('title', '').startswith(a_title))
 
     lahref = len(ahref_title_matches)
     # multiple matches: just create a list, and later a dict, look up the version names
-    #assert (lahref := len(ahref_title_matches)) <= 1, f"{lahref=:<4} > 1. {Id=}"
+    # assert (lahref := len(ahref_title_matches)) <= 1, f"{lahref=:<4} > 1. {Id=}"
 
     if lahref == 0: 
         logger.warning(f'no download count found for {Id}')
@@ -158,7 +150,7 @@ def extract_download_count(Id=None, composer=None, data=None) -> Optional[int]:
     dcounts = []
     # for every match, try to extract the download count
     for m in ahref_title_matches:
-        #m = ahref_title_matches[0]
+        # m = ahref_title_matches[0]
         dcount = m.text  
 
         try:
@@ -174,15 +166,14 @@ def extract_download_count(Id=None, composer=None, data=None) -> Optional[int]:
 # dcounts = extract_dcounts(data, ids=None, n=100)
 def extract_dcounts(data: dict, ids=None, n=100):
     """ extract a batch of download counts, using a random sample """
+
     # test on a sample of ids
     if ids is None:
         ids = random.sample(list(data.keys()), n)
 
-    #ids = [i[0] for i in ids]
-
     dcounts = dict()
+
     # todo: make async using aiohttp
-    #for i in ids:
     for i in tqdm.tqdm(ids):
         #if i%10 == 0:
 
@@ -190,24 +181,24 @@ def extract_dcounts(data: dict, ids=None, n=100):
 
     return dcounts
 
-async def aextract_download_count(Id=None, data=None):
+async def aextract_download_count(id=None, data=None):
     """ extract download count asynchronously from imlsp html page using aiohttp """
 
-    pass 
+    raise NotImplementedError
 
-async def fetch(session, id, url) -> Dict[str, str]:
-    #with aiohttp.Timeout(10):
-    if 1:
-        async with session.get(url) as response:
-            return {id: await response.text()}
+async def fetch(session, url) -> Dict[str, str]:
+    
+    # with aiohttp.Timeout(10):
+    async with session.get(url) as response:
+        return {id: await response.text()}
 
-async def fetch_all(session, urls: Dict[str, str], loop):
+async def fetch_all(session, urls: Dict[str, str]):
     """ 
         urls   dict of id keys and url values
 
     """ 
     results = await asyncio.gather(
-        *[fetch(session, id, url) for id, url in urls.items()],
+        *[fetch(session, url) for id, url in urls.items()],
         return_exceptions=True  # default is false, that would raise
     )
 
@@ -231,8 +222,8 @@ async def aextract_dcounts(data: dict, ids=None, n=100):
     loop = asyncio.get_event_loop()
 
     async with aiohttp.ClientSession(loop=loop) as session:
-        #ress = loop.run_until_complete(fetch_all(session, urls, loop))
-        ress = await fetch_all(session, urls, loop)
+        # ress = loop.run_until_complete(fetch_all(session, urls, loop))
+        ress = await fetch_all(session, urls)
         # async with session.get('http://httpbin.org/get') as resp:
         #     print(resp.status)
         #     print(await resp.text())
@@ -243,12 +234,12 @@ async def aextract_dcounts(data: dict, ids=None, n=100):
 if __name__ == "__main__":
 
     try: 
-        data 
+        wdata 
     except NameError:
-        data = get_redis('imslp_works_data')
+        wdata = get_redis('imslp_works_data')
 
         logger.info(f'got redis data, now running ')
 
-    ress = asyncio.run(aextract_dcounts(data, ids=None, n=5))
+    res = asyncio.run(aextract_dcounts(wdata, ids=None, n=5))
 
-    logger.info(f'{len(ress)=}')
+    logger.info(f'{len(res)=}')
