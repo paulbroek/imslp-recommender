@@ -288,17 +288,20 @@ def extract_all_items(Id=None, data=None) -> dict:
     r = manager.request('GET', url)
     soup = bs.BeautifulSoup(r.data, "html.parser")
     metadata = parse_metadata_table(soup)
+    # sheetmusicSection = soup # now you will also scrape recordings, mind this. 
+    sheetmusicSection = soup.find(attrs={'id': 'wpscoresection'})
     logger.debug(f"{metadata=}")
 
     # breakpoint()
-    info_matches = soup.find_all(attrs={'class': 'we_file_info2'})
-    url_matches = soup.find_all(attrs={'class': 'external text'})
+    info_matches = sheetmusicSection.find_all(attrs={'class': 'we_file_info2'})
+    url_matches = sheetmusicSection.find_all(attrs={'class': 'external text'})
     urls = [u.attrs['href'] for u in url_matches if 'https://imslp.org/wiki/Speci' in u.attrs['href']]
     d = {i: span_info.text for i, span_info in enumerate(info_matches)}
     d = {i: regex_parse_fields(v) for i,v in d.items()}
 
     for i in range(len(info_matches)):
         error_cnt['parsecount'] += 1
+
         if len(urls) == len(info_matches):
             d[i]['url'] = urls[i]
         else:
