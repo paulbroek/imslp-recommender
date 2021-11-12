@@ -1,0 +1,24 @@
+version: '3.9'
+services:
+
+  scrape-imslp:
+    # restart: unless-stopped
+    image: scrapy-env
+    container_name: scrape-imslp
+    # network_mode:  host
+    # environment:     - LIST_TO_SCRAPE=79365.Favorite_herbal_natural_health_books
+    #  - OUTPUT_FILE_SUFFIX=best_herbal_books
+    command:
+            - /bin/bash
+            - -c
+            - |
+              cd /mnt_src
+              python get_works_list.py --scrape
+
+    # ports:
+    #  - "5555:5555"
+     # - LIST_TO_SCRAPE="1.Best_Books_Ever"
+     # - OUTPUT_FILE_SUFFIX="best_001_700"
+     # - AM_I_IN_A_DOCKER_CONTAINER=Yes
+    volumes:
+     - /home/${USER}/repos/imslp-recommender/imslp-recommender:/mnt_src
