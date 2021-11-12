@@ -162,26 +162,30 @@ re_finalize = { \
 def regex_parse_fields(text):
     # d = defaultdict(None)
     d = dict(partial=False)
+    # delayError = False
+    # delayMsg = ''
     for patt, matcher in re_patterns.items():
         matches = matcher(text)
         if len(matches) == 1:
             d[patt] = matches[0]
-        elif len(matches) == 0:
-            logger.warning(f"cannot parse '{patt}' \nrow.{text=}")
+        elif len(matches) == 0 and patt not in re_fallback:
+            logger.warning(f"cannot parse '{patt}' row.{text=}")
             error_cnt[patt] += 1
         else:
-            logger.warning(f"{len(matches)=} {matches=} \nrow.{text=}")
+            logger.warning(f"cannot parse '{patt}', {len(matches)=} {matches=} row.{text=}")
 
         # fallback try for 'npage'
         if patt not in d and patt in re_fallback:
             matches = re_fallback[patt](text)
-            if len(matches) == 2:
+            if len(matches) == 1:
                 try:
-                    d[patt] = int(matches[1]) - (matches[0])
+                    d[patt] = int(matches[0][1]) - int(matches[0][0])
                     error_cnt[patt] -= 1
                     d['partial'] = True
+                    logger.warning(f"parsed 'npage' in second try")
                 except Exception as e:
-                    logger.warning(f"could also not parse 'npage' in second try. {e=!r}")
+                    logger.warning(f"could not parse 'npage' in second try. {e=!r}")
+                    error_cnt[patt] += 1
 
         if patt in d and patt in re_finalize:
             try:
@@ -277,7 +281,7 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
     r = manager.request('GET', url)
     soup = bs.BeautifulSoup(r.data, "html.parser")
     metadata = parse_metadata_table(soup)
-    logger.info(f"{metadata=}")
+    logger.debug(f"{metadata=}")
 
     # breakpoint()
     info_matches = soup.find_all(attrs={'class': 'we_file_info2'})
@@ -287,6 +291,7 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
     d = {i: regex_parse_fields(v) for i,v in d.items()}
     if len(urls) == len(info_matches):
         for i in range(len(info_matches)):
+            error_cnt['parsecount'] += 1
             d[i]['url'] = urls[i]
             findRix= re.findall(r"/(\d+)$", urls[i]) # rangeindex from imslp
             if len(findRix) == 1:
@@ -307,7 +312,7 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
     return d
 
 # dcounts = extract_dcounts(data, ids=None, n=100)
-def extract_dcounts(data: dict, ids=None, n=100, debug_invl=50):
+def extract_dcounts(data: dict, ids=None, n=100, mininterval=9, debug_invl=50):
     """ extract a batch of download counts, using a random sample """
 
     # test on a sample of ids
@@ -319,7 +324,7 @@ def extract_dcounts(data: dict, ids=None, n=100, debug_invl=50):
     dcounts = dict()
 
     # todo: make async using aiohttp
-    for i, id_ in enumerate(tqdm.tqdm(ids)):
+    for i, id_ in enumerate(tqdm.tqdm(ids, mininterval=mininterval)):
         if i > 0 and i%debug_invl == 0:
             logger.info(f"error_cnt: {dict(error_cnt)}")
 
