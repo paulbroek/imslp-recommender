@@ -45,7 +45,7 @@ retformat = 'json'
 api_imslp = "http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type={}/start={}/retformat={}"
 redisKey = 'imslp_download_entries'
 redisKeyRawSoup = 'imslp_raw_html'
-scrapeVersion = 5
+scrapeVersion = 6
 
 manager = PoolManager(10)
 id_remap = lambda x: x.replace('Category:','')
@@ -251,6 +251,7 @@ def parse_metadata_table(text):
 # todo: extract 'Genre Categorieën' , upper page
 # todo: create postgres tables with sqlalchemy
 # todo: make async? 
+# todo: scrape the 'Arrangements and Transcriptions' page as well. Click on it, or?
 # ldata = list(works_data.items())
 # dcount = extract_all_items(Id=ldata[1000][0], data=works_data)
 def extract_all_items(Id=None, data=None) -> dict:
@@ -290,29 +291,40 @@ def extract_all_items(Id=None, data=None) -> dict:
     metadata = parse_metadata_table(soup)
     logger.debug(f"{metadata=}")
     # sheetmusicSection = soup # now you will also scrape recordings, mind this. 
+    # audioSection = soup.find(attrs={'id': 'wpaudiosection'}) # or select audio section here
     sheetmusicSection = soup.find(attrs={'id': 'wpscoresection'})
     if sheetmusicSection is None:
         logger.warning(f"this work has no sheet music items: {Id}")
         return
 
+    boxes = sheetmusicSection.find_all(attrs={'class': 'we'})
+    info_matches = [box.find(attrs={'class': 'we_file_download plainlinks'}) for box in boxes]
+    if len(info_matches) == 0:
+        return
+
+    # logger.info(f"{info_matches=}")
+
     # breakpoint()
-    info_matches = sheetmusicSection.find_all(attrs={'class': 'we_file_info2'})
-    url_matches = sheetmusicSection.find_all(attrs={'class': 'external text'})
-    urls = [u.attrs['href'] for u in url_matches if 'https://imslp.org/wiki/Speci' in u.attrs['href']]
+    # info_matches = sheetmusicSection.find_all(attrs={'class': 'we_file_info2'})
+    # info_matches = [box.find(attrs={'class': 'we_file_download plainlinks'}) for box in infoBoxes]
+    # url_matches = sheetmusicSection.find_all(attrs={'class': 'external text'})
+    # urls = [u.attrs['href'] for u in url_matches if 'https://imslp.org/wiki/Speci' in u.attrs['href']]
     d = {i: span_info.text for i, span_info in enumerate(info_matches)}
     d = {i: regex_parse_fields(v) for i,v in d.items()}
 
-    for i in range(len(info_matches)):
+    # for i in range(len(info_matches)):
+    for i, box in enumerate(boxes):
         error_cnt['parsecount'] += 1
 
-        if len(urls) == len(info_matches):
-            d[i]['url'] = urls[i]
-        else:
-            logger.warning(f"{len(info_matches)=} != {len(urls)=}")
-            error_cnt['nurl_unequal_to_ninfo'] += 1
-
-        findRix= re.findall(r"/(\d+)$", urls[i]) # rangeindex from imslp
+        # if len(urls) == len(info_matches):
+        #     d[i]['url'] = urls[i]
+        # else:
+        #     logger.warning(f"{len(info_matches)=} != {len(urls)=}")
+        #     error_cnt['nurl_unequal_to_ninfo'] += 1
+        url = box.find(attrs={'class': 'external text'}).attrs['href']
+        findRix= re.findall(r"/(\d+)$", url) # rangeindex from imslp
         if len(findRix) == 1:
+            d[i]['url'] = url
             d[i]['rix'] = rix = int(findRix[0])
             d[i]['title'] = Id 
             d[i]['itemno'] = i 
