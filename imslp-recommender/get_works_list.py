@@ -38,6 +38,7 @@ rcon = rs(home=0, db=4, decode=0)
 
 retformat = 'json'
 api_imslp = "http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type={}/start={}/retformat={}"
+redisKey = 'imslp_download_entries'
 
 manager = PoolManager(10)
 id_remap = lambda x: x.replace('Category:','')
@@ -170,7 +171,8 @@ def regex_parse_fields(text):
 
     return d
 
-# todo: auto always send data to redis
+# todo: auto always send data to redis (done)
+# todo: check if dix exists in redis, and stop parsing if it exists. 
 # ldata = list(works_data.items())
 # dcount = extract_download_count(Id=ldata[1000][0], data=works_data)
 def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_download_entries') -> dict:
@@ -262,8 +264,10 @@ def extract_dcounts(data: dict, ids=None, n=100, debug_invl=50):
     """ extract a batch of download counts, using a random sample """
 
     # test on a sample of ids
-    if ids is None:
+    if ids is None and n is not None:
         ids = random.sample(list(data.keys()), n)
+    elif ids is None and n is None:
+        ids = list(data.keys())
 
     dcounts = dict()
 
@@ -397,6 +401,12 @@ if __name__ == "__main__":
     # logger.info(f'{len(res)=}')
 
     if args.scrape:
-        dcounts = extract_dcounts(data, ids=None, n=100_000)
+        # nrows = 100_000
+        # nrows = len(data)
+        nrows = None
+        if nrows is not None:
+            logger.info(f"will parse {nrows=:,}")
+        else:
+            logger.info(f"will parse all {len(data)=:,} rows")
 
-
+        dcounts = extract_dcounts(data, ids=None, n=None)
