@@ -200,7 +200,7 @@ def regex_parse_fields(text):
             try:
                 d[patt] = re_finalize[patt](d[patt])
             except ValueError:
-                logger.wraning(f"could not parse {patt=} to float. {e=!r} {d[patt]=} {text=}")
+                logger.warning(f"could not parse {patt=} to float. {e=!r} {d[patt]=} {text=}")
 
     return d
 
