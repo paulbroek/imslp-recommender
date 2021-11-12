@@ -209,7 +209,7 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
     url = data[Id]['permlink']
     r = manager.request('GET', url)
     soup = bs.BeautifulSoup(r.data)
-    a_title = 'Special:GetFCtrStats' # /
+    # a_title = 'Special:GetFCtrStats' # /
     # ahrefs = soup('a', href=True)
 
     # is there a quicker way of doing this?
@@ -228,6 +228,8 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
             findRix= re.findall(r"/(\d+)$", urls[i]) # rangeindex from imslp
             if len(findRix) == 1:
                 d[i]['rix'] = rix = int(findRix[0])
+                d[i]['title'] = Id 
+                d[i]['itemno'] = i 
 
                 # ugly, but for now, save here to redis
                 rcon.r.zadd(redisKey, {json.dumps(d): rix})
@@ -401,12 +403,13 @@ if __name__ == "__main__":
     # logger.info(f'{len(res)=}')
 
     if args.scrape:
+        nrows = 10
         # nrows = 100_000
         # nrows = len(data)
-        nrows = None
+        # nrows = None
         if nrows is not None:
             logger.info(f"will parse {nrows=:,}")
         else:
             logger.info(f"will parse all {len(data)=:,} rows")
 
-        dcounts = extract_dcounts(data, ids=None, n=None)
+        dcounts = extract_dcounts(data, ids=None, n=nrows)
