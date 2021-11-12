@@ -316,8 +316,8 @@ def extract_all_items(Id=None, data=None) -> dict:
 
         # downloadUrl = ''
         downloadDiv = box.find(attrs={'class': 'external text'})
-        if 'href' not in downloadDiv.attrs:
-            logger.warning(f"attr 'href' not in downloadDiv, cannot extract downloadUrl. {Id=}")
+        if downloadDiv is None or 'href' not in downloadDiv.attrs:
+            logger.warning(f"downloadDiv None or attr 'href' not in downloadDiv, cannot extract downloadUrl. {Id=} {downloadDiv=}")
             error_cnt["cannot extract downloadUrl"] += 1
             return
         
