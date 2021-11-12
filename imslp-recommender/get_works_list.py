@@ -45,7 +45,7 @@ retformat = 'json'
 api_imslp = "http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type={}/start={}/retformat={}"
 redisKey = 'imslp_download_entries'
 redisKeyRawSoup = 'imslp_raw_html'
-scrapeVersion = 4
+scrapeVersion = 5
 
 manager = PoolManager(10)
 id_remap = lambda x: x.replace('Category:','')
