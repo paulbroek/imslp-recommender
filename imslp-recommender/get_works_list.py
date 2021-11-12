@@ -25,6 +25,7 @@ import re
 from yapic import json
 import tqdm
 import pandas as pd
+import timeago
 # import pdb; pdb.set_trace()
 
 # easy for filtering out composers
@@ -335,6 +336,7 @@ def extract_dict_keys(row):
     return []
 
 # df = dcounts_to_df(dcounts)
+# df = dcounts_to_df(data, sortBy='scrapeDate')
 # df = dcounts_to_df(data)
 # withmeta = df[~df.parent_meta.isnull()]
 def dcounts_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], sortBy=None):
@@ -358,6 +360,7 @@ def dcounts_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], sortBy
     # try to make columns neater, or return df
     df['ndownload'] = df['ndownload'].astype(float)
     df['npage'] = df['npage'].astype(float)
+    df['ago'] = df['scrapeDate'].map(lambda x: timeago.format(x, datetime.utcnow()), na_action='ignore')
     df['parent_meta_keys'] = df.parent_meta.map(extract_dict_keys)
 
     # todo: if duplicate urls exist, drop the one without parent_metadata
@@ -459,12 +462,6 @@ class ArgParser():
           help="only load this file, do not scrape"
         )
         CLI.add_argument(
-          "--scrape", 
-          action='store_true',         
-          default=False,
-          help="scrape imslp downloadable items and save to redis"
-        )
-        CLI.add_argument(
           "--skipExistingTitles", 
           action='store_true',         
           default=False,
@@ -504,34 +501,33 @@ if __name__ == "__main__":
     if args.dryrun:
         sys.exit()
 
-    if args.scrape:
-        nrows = args.nrow
-        # nrows = 100_000
-        # nrows = len(data)
-        # nrows = None
-        if nrows is not None:
-            nrows = int(nrows)
-            logger.info(f"will parse {nrows=:,}")
-        else:
-            logger.info(f"will parse all {len(wdata)=:,} rows")
+    nrows = args.nrow
+    # nrows = 100_000
+    # nrows = len(data)
+    # nrows = None
+    if nrows is not None:
+        nrows = int(nrows)
+        logger.info(f"will parse {nrows=:,}")
+    else:
+        logger.info(f"will parse all {len(wdata)=:,} rows")
 
-        # skip existing titles?
-        if args.skipExistingTitles:
-            # get titles collected in redis
-            data = get_multi_zset('imslp_download_entries')
-            df = dcounts_to_df(data)
-            titles = set(df.title.values)
+    # skip existing titles?
+    if args.skipExistingTitles:
+        # get titles collected in redis
+        data = get_multi_zset('imslp_download_entries')
+        df = dcounts_to_df(data)
+        titles = set(df.title.values)
 
-            # filter out existing titles
-            all_titles = set(wdata.keys())
-            unscraped_titles = all_titles - titles
+        # filter out existing titles
+        all_titles = set(wdata.keys())
+        unscraped_titles = all_titles - titles
 
-            logger.info(f"{len(all_titles)=:,} {len(unscraped_titles)=:,}")
+        logger.info(f"{len(all_titles)=:,} {len(unscraped_titles)=:,}")
 
-            to_scrape = {k: v for k,v in wdata.items() if k in unscraped_titles}
-            logger.info(f"no titles to scrape: {len(to_scrape):,}")
+        to_scrape = {k: v for k,v in wdata.items() if k in unscraped_titles}
+        logger.info(f"no titles to scrape: {len(to_scrape):,}")
 
-        else:
-            to_scrape = wdata
+    else:
+        to_scrape = wdata
 
-        dcounts = extract_dcounts(to_scrape, ids=None, n=nrows)
+    dcounts = extract_dcounts(to_scrape, ids=None, n=nrows)
