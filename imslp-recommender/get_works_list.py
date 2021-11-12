@@ -299,6 +299,8 @@ def extract_all_items(Id=None, data=None) -> dict:
 
     boxes = sheetmusicSection.find_all(attrs={'class': 'we'})
     info_matches = [box.find(attrs={'class': 'we_file_download plainlinks'}) for box in boxes]
+    info_matches = list(filter(lambda x: x is not None, info_matches))
+    
     if len(info_matches) == 0:
         return
 
