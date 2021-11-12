@@ -403,10 +403,10 @@ if __name__ == "__main__":
     # logger.info(f'{len(res)=}')
 
     if args.scrape:
-        nrows = 10
+        # nrows = 10
         # nrows = 100_000
         # nrows = len(data)
-        # nrows = None
+        nrows = None
         if nrows is not None:
             logger.info(f"will parse {nrows=:,}")
         else:
