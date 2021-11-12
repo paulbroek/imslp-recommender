@@ -43,6 +43,7 @@ rcon = rs(home=0, db=4, decode=0)
 retformat = 'json'
 api_imslp = "http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type={}/start={}/retformat={}"
 redisKey = 'imslp_download_entries'
+redisKeyRawSoup = 'imslp_raw_html'
 scrapeVersion = 3
 
 manager = PoolManager(10)
@@ -123,13 +124,13 @@ def save_redis(data, key=None) -> None:
     rcon.r.set(key, json.dumps(data))
 
 # data = get_redis('imslp_people_data')
-# data = get_redis('imslp_works_data')
 def get_redis(key: str) -> Dict[str, Dict[str, Any]]:
 
     d = rcon.r.get(key)
     return json.loads(d)
 
 # data = get_multi_zset('imslp_download_entries')
+# data = get_multi_zset('imslp_raw_html')
 def get_multi_zset(key: str) -> List[Dict[str, Any]]:
 
     res = rcon.r.zrevrangebyscore(key, '+inf', '-inf')
@@ -314,6 +315,7 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
 
                 # ugly, but for now, save here to redis
                 rcon.r.zadd(redisKey, {json.dumps(d[i]): rix})
+                rcon.r.zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix})
     else:
         logger.warning(f"{len(info_matches)=} != {len(urls)=}")
         error_cnt['nurl_unequal_to_ninfo'] += 1
