@@ -230,6 +230,7 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
                 d[i]['rix'] = rix = int(findRix[0])
                 d[i]['title'] = Id 
                 d[i]['itemno'] = i 
+                d[i]['parent'] = data[Id]['parent'].replace('Category:','')
 
                 # ugly, but for now, save here to redis
                 rcon.r.zadd(redisKey, {json.dumps(d): rix})
@@ -376,6 +377,12 @@ class ArgParser():
           default=False,
           help="scrape imslp downloadable items and save to redis"
         )
+        CLI.add_argument(
+          "--nrow", 
+          type=str,
+          default=None,
+          help="number of rows to scrape"
+        )
 
         return CLI
 
@@ -403,11 +410,12 @@ if __name__ == "__main__":
     # logger.info(f'{len(res)=}')
 
     if args.scrape:
-        # nrows = 10
+        nrows = args.nrow
         # nrows = 100_000
         # nrows = len(data)
-        nrows = None
+        # nrows = None
         if nrows is not None:
+            nrows = int(nrows)
             logger.info(f"will parse {nrows=:,}")
         else:
             logger.info(f"will parse all {len(data)=:,} rows")
