@@ -35,7 +35,7 @@ from rarc.utils.misc import chainGatherRes
 from rarc.utils.log import setup_logger, set_log_level, loggingLevelNames
 from rarc.redis_conn import rs
 
-LOG_FMT = "%(asctime)s - %(module)-16s - %(lineno)-4s - %(funcName)-16s - %(levelname)-7s - %(message)s"  # title
+LOG_FMT = "%(asctime)s - %(module)-16s - %(lineno)-4s - %(funcName)-22s - %(levelname)-7s - %(message)s"  # title
 
 # create a new db to save al 36_000 categories in
 rcon = rs(home=0, db=4, decode=0)
