@@ -13,7 +13,7 @@ services:
             - -c
             - |
               cd /mnt_src
-              python get_works_list.py --scrape
+              python get_works_list.py --scrape --skipExistingTitles
 
     # ports:
     #  - "5555:5555"
