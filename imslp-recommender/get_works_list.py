@@ -43,7 +43,7 @@ rcon = rs(home=0, db=4, decode=0)
 retformat = 'json'
 api_imslp = "http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type={}/start={}/retformat={}"
 redisKey = 'imslp_download_entries'
-scrapeVersion = 2
+scrapeVersion = 3
 
 manager = PoolManager(10)
 id_remap = lambda x: x.replace('Category:','')
@@ -161,20 +161,29 @@ re_finalize = { \
 # todo: is download size always in MB?
 def regex_parse_fields(text):
     # d = defaultdict(None)
-    d = dict(partial=False)
+    d = dict(partial=False, parts=False)
     # delayError = False
     # delayMsg = ''
     for patt, matcher in re_patterns.items():
         matches = matcher(text)
         if len(matches) == 1:
             d[patt] = matches[0]
-        elif len(matches) == 0 and patt not in re_fallback:
+        elif len(matches) == 0 and (patt not in re_fallback):
             logger.warning(f"cannot parse '{patt}' row.{text=}")
             error_cnt[patt] += 1
-        else:
+        elif patt != 'npage':
             logger.warning(f"cannot parse '{patt}', {len(matches)=} {matches=} row.{text=}")
+        else:
+            # fallback try for 'npage': a list of numbers can be summed
+            try:
+                d[patt] = sum(map(int, matches))
+                logger.warning(f"parsed 'npage' in second try")
+                d['parts'] = True
+                continue
+            except Exception as e:
+                logger.warning(f"cannot parse list of 'npage' items, {len(matches)=} {matches=}")   
 
-        # fallback try for 'npage'
+        # fallback try for 'npage': 2-30, partial section of a piece can be subtracted
         if patt not in d and patt in re_fallback:
             matches = re_fallback[patt](text)
             if len(matches) == 1:
