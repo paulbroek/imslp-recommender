@@ -38,13 +38,14 @@ from rarc.redis_conn import rs
 LOG_FMT = "%(asctime)s - %(module)-16s - %(lineno)-4s - %(funcName)-22s - %(levelname)-7s - %(message)s"  # title
 
 # create a new db to save al 36_000 categories in
-rcon = rs(home=0, db=4, decode=0)
+REDIS_DB = 4
+rcon = rs(home=0, db=REDIS_DB, decode=0)
 
 retformat = 'json'
 api_imslp = "http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type={}/start={}/retformat={}"
 redisKey = 'imslp_download_entries'
 redisKeyRawSoup = 'imslp_raw_html'
-scrapeVersion = 3
+scrapeVersion = 4
 
 manager = PoolManager(10)
 id_remap = lambda x: x.replace('Category:','')
@@ -251,9 +252,9 @@ def parse_metadata_table(text):
 # todo: create postgres tables with sqlalchemy
 # todo: make async? 
 # ldata = list(works_data.items())
-# dcount = extract_download_count(Id=ldata[1000][0], data=works_data)
-def extract_download_count(Id=None, data=None) -> dict:
-    """ extract download count from imslp html page
+# dcount = extract_all_items(Id=ldata[1000][0], data=works_data)
+def extract_all_items(Id=None, data=None) -> dict:
+    """ parse all items on a Works page
 
         id          title id from the HashablePageRecord, e.g. 'Polish Songs, Op.74 (Chopin, Frédéric)'
         composer    first do a composer look up, then look up download counts (slow)
@@ -295,31 +296,38 @@ def extract_download_count(Id=None, data=None) -> dict:
     urls = [u.attrs['href'] for u in url_matches if 'https://imslp.org/wiki/Speci' in u.attrs['href']]
     d = {i: span_info.text for i, span_info in enumerate(info_matches)}
     d = {i: regex_parse_fields(v) for i,v in d.items()}
-    if len(urls) == len(info_matches):
-        for i in range(len(info_matches)):
-            error_cnt['parsecount'] += 1
-            d[i]['url'] = urls[i]
-            findRix= re.findall(r"/(\d+)$", urls[i]) # rangeindex from imslp
-            if len(findRix) == 1:
-                d[i]['rix'] = rix = int(findRix[0])
-                d[i]['title'] = Id 
-                d[i]['itemno'] = i 
-                d[i]['parent'] = data[Id]['parent'].replace('Category:','')
-                d[i]['parent_meta'] = metadata # todo: should eventually become psql table, so that metadata gets saved only once for the parent
-                d[i]['version'] = scrapeVersion
-                d[i]['scrapeDate'] = datetime.utcnow()
 
-                # ugly, but for now, save here to redis
-                rcon.r.zadd(redisKey, {json.dumps(d[i]): rix})
-                rcon.r.zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix})
-    else:
-        logger.warning(f"{len(info_matches)=} != {len(urls)=}")
-        error_cnt['nurl_unequal_to_ninfo'] += 1
+    for i in range(len(info_matches)):
+        error_cnt['parsecount'] += 1
+        if len(urls) == len(info_matches):
+            d[i]['url'] = urls[i]
+        else:
+            logger.warning(f"{len(info_matches)=} != {len(urls)=}")
+            error_cnt['nurl_unequal_to_ninfo'] += 1
+
+        findRix= re.findall(r"/(\d+)$", urls[i]) # rangeindex from imslp
+        if len(findRix) == 1:
+            d[i]['rix'] = rix = int(findRix[0])
+            d[i]['title'] = Id 
+            d[i]['itemno'] = i 
+            d[i]['parent'] = data[Id]['parent'].replace('Category:','')
+            d[i]['parent_meta'] = metadata # todo: should eventually become psql table, so that metadata gets saved only once for the parent
+            d[i]['version'] = scrapeVersion
+            d[i]['scrapeDate'] = datetime.utcnow()
+
+            # ugly, but for now, save here to redis
+            rcon.r.zadd(redisKey, {json.dumps(d[i]): rix})
+            rcon.r.zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix})
+            # await rcon.aior[REDIS_DB].zadd(redisKey, {json.dumps(d[i]): rix})
+            # await rcon.aior[REDIS_DB].zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix}) # rcon.r.zadd
+
+        else:
+            logger.warning(f"{len(findRix)=} != 1")
 
     return d
 
-# dcounts = extract_dcounts(data, ids=None, n=100)
-def extract_dcounts(data: dict, ids=None, n=100, mininterval=9, debug_invl=50):
+# dcounts = scrape_all_works(data, ids=None, n=100)
+def scrape_all_works(data: dict, ids=None, n=100, mininterval=9, debug_invl=50):
     """ extract a batch of download counts, using a random sample """
 
     # test on a sample of ids
@@ -335,11 +343,11 @@ def extract_dcounts(data: dict, ids=None, n=100, mininterval=9, debug_invl=50):
         if i > 0 and i%debug_invl == 0:
             logger.info(f"error_cnt: {dict(error_cnt)}")
 
-        ret[id_] = extract_download_count(Id=id_, data=data)
+        ret[id_] = extract_all_items(Id=id_, data=data)
 
     return ret
 
-async def aextract_download_count(id_=None, data=None):
+async def aextract_all_items(id_=None, data=None):
     """ extract download count asynchronously from imlsp html page using aiohttp """
 
     raise NotImplementedError
@@ -350,11 +358,11 @@ def extract_dict_keys(row) -> List[str]:
 
     return []
 
-# df = dcounts_to_df(dcounts)
-# df = dcounts_to_df(data, renameDict={'parent_meta':'meta'}, sortBy='scrapeDate')
-# df = dcounts_to_df(data)
+# df = rdata_to_df(dcounts)
+# df = rdata_to_df(data, renameDict={'parent_meta':'meta'}, sortBy='scrapeDate')
+# df = rdata_to_df(data)
 # withmeta = df[~df.parent_meta.isnull()]
-def dcounts_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDict=None, sortBy=None):
+def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDict=None, sortBy=None):
 
     tuples, vals = [], []
     if isinstance(dcounts, dict):
@@ -432,7 +440,7 @@ async def fetch_all(session, urls: Dict[str, str]):
 
     return results
 
-async def aextract_dcounts(data: dict, ids=None, n=100):
+async def ascrape_all_works(data: dict, ids=None, n=100):
     """ extract a batch of download counts, using a random sample """
 
     if ids is None:
@@ -510,6 +518,12 @@ if __name__ == "__main__":
     bs4version = bs.__version__
     logger.info(f"running imslp parser. {args=} \n{bs4version=} ")
 
+    # res = asyncio.run(ascrape_all_works(data, ids=None, n=5))
+    # logger.info(f'{len(res)=}')
+
+    if args.dryrun:
+        sys.exit()
+
     try: 
         wdata
     except NameError:
@@ -517,12 +531,6 @@ if __name__ == "__main__":
         wdata = get_redis('imslp_works_data')
 
         logger.info(f'got redis data, now running ')
-
-    # res = asyncio.run(aextract_dcounts(data, ids=None, n=5))
-
-    # logger.info(f'{len(res)=}')
-    if args.dryrun:
-        sys.exit()
 
     nrows = args.nrow
     # nrows = 100_000
@@ -538,7 +546,7 @@ if __name__ == "__main__":
     if args.skipExistingTitles:
         # get titles collected in redis
         rdata = get_multi_zset('imslp_download_entries')
-        bdf = dcounts_to_df(rdata)
+        bdf = rdata_to_df(rdata)
         titles = set(bdf.title.values)
 
         # filter out existing titles
@@ -553,4 +561,4 @@ if __name__ == "__main__":
     else:
         to_scrape = wdata
 
-    dcounts = extract_dcounts(to_scrape, ids=None, n=nrows)
+    dcounts = scrape_all_works(to_scrape, ids=None, n=nrows)
