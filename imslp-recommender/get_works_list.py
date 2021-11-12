@@ -12,6 +12,7 @@ from typing import Dict, Tuple, List, Any, Union, Optional, Callable
 import random
 import logging
 # from time import sleep
+import sys
 from itertools import chain
 from collections import defaultdict
 from datetime import datetime
@@ -45,6 +46,7 @@ scrapeVersion = 2
 
 manager = PoolManager(10)
 id_remap = lambda x: x.replace('Category:','')
+error_cnt = defaultdict(int)
 
 def parse_row(row: dict, id_remap: Callable=id_remap) -> dict:
     try:
@@ -133,6 +135,12 @@ def get_multi_zset(key: str) -> List[Dict[str, Any]]:
 
     return [json.loads(d) for d in res]
 
+def remove_older_versions_redis(key: str):
+    """ get all rows from redis, but remove entries that have multiple values, only keep the newest row """
+
+    # todo: implement
+    raise NotImplementedError
+
 re_patterns = { \
     'size' : lambda x: re.findall(r"(?<=-)(.+)MB", x), 
     'npage' : lambda x: re.findall(r",\s+(\d+)", x),
@@ -148,8 +156,6 @@ re_fallback = { \
 re_finalize = { \
     'size' : lambda x: float(x), # less strict
 }
-
-error_cnt = defaultdict(int)
 
 # todo: is download size always in MB?
 def regex_parse_fields(text):
@@ -188,12 +194,18 @@ def parse_metadata_table(text):
         Jaar van Compositie 1997 or before
         Genre Categorieën   Pieces; For piano; Scores featuring the piano; [4 more...]
     """
+    d = dict()
 
     table = text.find('table')
+    if table is None:
+        err = 'cannot find metadata table'
+        logger.warning(err)
+        error_cnt[err] += 1
+        return d
     # assert len(table) == 1, f"{len(table)=} \n{table=}"
     # table = table[0]
     tableRows = table.find_all('tr')
-    d = dict()
+    
     for row in tableRows:
         rowHeader = row.find('th')
         rowValue = row.find('td')
@@ -441,6 +453,12 @@ class ArgParser():
           help="save results to redis"
         )
         CLI.add_argument(
+          "--dryrun", 
+          action='store_true',         
+          default=False,
+          help="only load this file, do not scrape"
+        )
+        CLI.add_argument(
           "--scrape", 
           action='store_true',         
           default=False,
@@ -483,6 +501,8 @@ if __name__ == "__main__":
     # res = asyncio.run(aextract_dcounts(data, ids=None, n=5))
 
     # logger.info(f'{len(res)=}')
+    if args.dryrun:
+        sys.exit()
 
     if args.scrape:
         nrows = args.nrow
