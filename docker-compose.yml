@@ -3,7 +3,7 @@ services:
 
   scrape-imslp:
     # restart: unless-stopped
-    image: scrapy-env
+    image: py39_feed_env
     container_name: scrape-imslp
     # network_mode:  host
     # environment:     - LIST_TO_SCRAPE=79365.Favorite_herbal_natural_health_books
