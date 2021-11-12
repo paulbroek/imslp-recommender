@@ -229,7 +229,7 @@ def parse_metadata_table(text):
         try:
             rowHeaderText = rowHeader.text.strip()
         except Exception as e:
-            logger.warning(f"cannot parse rowHeader text. {e=!r}")
+            # logger.warning(f"cannot parse rowHeader text. {e=!r}")
             continue
             
         rowValueText = ''
@@ -320,8 +320,8 @@ def extract_all_items(Id=None, data=None) -> dict:
             logger.warning(f"attr 'href' not in downloadDiv, cannot extract downloadUrl. {Id=}")
             error_cnt["cannot extract downloadUrl"] += 1
             return
-        else:
-            downloadUrl = downloadDiv.attrs['href']
+        
+        downloadUrl = downloadDiv.attrs['href']
 
         findRix= re.findall(r"/(\d+)$", downloadUrl) # rangeindex from imslp
         if len(findRix) == 1:
