@@ -233,7 +233,7 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
                 d[i]['parent'] = data[Id]['parent'].replace('Category:','')
 
                 # ugly, but for now, save here to redis
-                rcon.r.zadd(redisKey, {json.dumps(d): rix})
+                rcon.r.zadd(redisKey, {json.dumps(d[i]): rix})
     else:
         logger.warning(f"{len(info_matches)=} != {len(urls)=}")
     
