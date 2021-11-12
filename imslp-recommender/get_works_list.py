@@ -155,7 +155,7 @@ re_fallback = { \
 }
 
 re_finalize = { \
-    'size' : lambda x: float(x), # less strict
+    'size' : float # lambda x: float(x), # less strict
 }
 
 # todo: is download size always in MB?
@@ -184,7 +184,10 @@ def regex_parse_fields(text):
                     logger.warning(f"could also not parse 'npage' in second try. {e=!r}")
 
         if patt in d and patt in re_finalize:
-            d[patt] = re_finalize[patt](d[patt])
+            try:
+                d[patt] = re_finalize[patt](d[patt])
+            except ValueError:
+                logger.wraning(f"could not parse {patt=} to float. {e=!r} {d[patt]=} {text=}")
 
     return d
 
@@ -329,17 +332,17 @@ async def aextract_download_count(id=None, data=None):
 
     raise NotImplementedError
 
-def extract_dict_keys(row):
+def extract_dict_keys(row) -> List[str]:
     if isinstance(row, dict):
         return list(row.keys())
 
     return []
 
 # df = dcounts_to_df(dcounts)
-# df = dcounts_to_df(data, sortBy='scrapeDate')
+# df = dcounts_to_df(data, renameDict={'parent_meta':'meta'}, sortBy='scrapeDate')
 # df = dcounts_to_df(data)
 # withmeta = df[~df.parent_meta.isnull()]
-def dcounts_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], sortBy=None):
+def dcounts_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDict=None, sortBy=None):
 
     tuples, vals = [], []
     if isinstance(dcounts, dict):
@@ -361,11 +364,16 @@ def dcounts_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], sortBy
     df['ndownload'] = df['ndownload'].astype(float)
     df['npage'] = df['npage'].astype(float)
     df['ago'] = df['scrapeDate'].map(lambda x: timeago.format(x, datetime.utcnow()), na_action='ignore')
+    # replace parent_meta na vals with empty dicts. --> cannot replace nans with objects. ?
+    # df.fillna(dict(parent_meta=dict()), inplace=True)
     df['parent_meta_keys'] = df.parent_meta.map(extract_dict_keys)
 
     # todo: if duplicate urls exist, drop the one without parent_metadata
     # todo: or use a version number? And prefer the highest version
     # todo: collaps metadata dict to new columns, what value to use as null placeholder?
+
+    if renameDict is not None:
+        df = df.rename(columns=renameDict)
 
     if sortBy is not None:
         assert sortBy in df.columns, f"{sortBy=} not in cols={list(df.columns)}"
