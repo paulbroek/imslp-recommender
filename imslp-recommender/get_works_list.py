@@ -159,12 +159,10 @@ re_finalize = { \
     'size' : float # lambda x: float(x), # less strict
 }
 
-# todo: is download size always in MB?
 def regex_parse_fields(text):
-    # d = defaultdict(None)
+
     d = dict(partial=False, parts=False)
-    # delayError = False
-    # delayMsg = ''
+        
     for patt, matcher in re_patterns.items():
         matches = matcher(text)
         if len(matches) == 1:
@@ -201,7 +199,7 @@ def regex_parse_fields(text):
             try:
                 d[patt] = re_finalize[patt](d[patt])
             except ValueError:
-                logger.warning(f"could not parse {patt=} to float. {e=!r} {d[patt]=} {text=}")
+                logger.warning(f"could not parse {patt=} to float. {d[patt]=} {text=}")
 
     return d
 
@@ -227,19 +225,17 @@ def parse_metadata_table(text):
     for row in tableRows:
         rowHeader = row.find('th')
         rowValue = row.find('td')
-        # assert len(cells) == 2, f"{len(cells)=} \n{cells=}"
-        # d[cells[0].text] = d[cells[0].text]
         try:
             rowHeaderText = rowHeader.text.strip()
         except Exception as e:
-            logger.warning(f"cannot parse rowHeader text")
+            logger.warning(f"cannot parse rowHeader text. {e=!r}")
             continue
             
         rowValueText = ''
         try:
             rowValueText = rowValue.text.strip()
         except Exception as e:
-            logger.warning(f"cannot parse rowValue text")
+            logger.warning(f"cannot parse rowValue text {e=!r}")
 
         if rowHeaderText == 'Genre Categories':
             # parse to a list of categories
