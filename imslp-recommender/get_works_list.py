@@ -8,7 +8,7 @@
         ipy get_works_list.py -i
 """
 
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, List, Any, Union, Optional, Callable
 import random
 import logging
 # from time import sleep
@@ -110,18 +110,25 @@ def get_imslp(api_type=2, max_pages=None, id_remap: Callable=id_remap) -> Dict[s
 # people_data = get_imslp(api_type=1, id_remap=id_remap)
 # works_data = get_imslp(api_type=2)
 # works_data = get_imslp(api_type=2, max_pages=1)
-# save_redis(name='imslp_people_data', data=people_data)
-# save_redis(name='imslp_works_data', data=works_data)
-def save_redis(data, name=None) -> None:
-    assert name is not None
-    rcon.r.set(name, json.dumps(data))
+# save_redis(people_data, 'imslp_people_data')
+# save_redis(works_data, 'imslp_works_data')
+def save_redis(data, key=None) -> None:
+    assert key is not None
+    rcon.r.set(key, json.dumps(data))
 
+# data = get_redis('imslp_people_data')
 # data = get_redis('imslp_works_data')
-def get_redis(name=None) -> Dict[str, Dict[str, Any]]:
-    assert name is not None
+def get_redis(key: str) -> Dict[str, Dict[str, Any]]:
 
-    d = rcon.r.get(name)
+    d = rcon.r.get(key)
     return json.loads(d)
+
+# data = get_multi_zset('imslp_download_entries')
+def get_multi_zset(key: str) -> List[Dict[str, Any]]:
+
+    res = rcon.r.zrevrangebyscore(key, '+inf', '-inf')
+
+    return [json.loads(d) for d in res]
 
 re_patterns = { \
     'size' : lambda x: re.findall(r"(?<=-)(.+)MB", x), 
@@ -171,8 +178,49 @@ def regex_parse_fields(text):
 
     return d
 
+def parse_metadata_table(text):
+    """ 
+        metadata table contains year of composition, and categories:
+
+        Jaar van Compositie 1997 or before
+        Genre Categorieën   Pieces; For piano; Scores featuring the piano; [4 more...]
+    """
+
+    table = text.find('table')
+    # assert len(table) == 1, f"{len(table)=} \n{table=}"
+    # table = table[0]
+    tableRows = table.find_all('tr')
+    d = dict()
+    for row in tableRows:
+        rowHeader = row.find('th')
+        rowValue = row.find('td')
+        # assert len(cells) == 2, f"{len(cells)=} \n{cells=}"
+        # d[cells[0].text] = d[cells[0].text]
+        try:
+            rowHeaderText = rowHeader.text.strip()
+        except Exception as e:
+            logger.warning(f"cannot parse rowHeader text")
+            continue
+            
+        rowValueText = ''
+        try:
+            rowValueText = rowValue.text.strip()
+        except Exception as e:
+            logger.warning(f"cannot parse rowValue text")
+
+        if rowHeaderText == 'Genre Categories':
+            # parse to a list of categories
+            rowValueText = rowValueText.split('; ')
+
+        d[rowHeaderText] = rowValueText
+
+    return d
+
 # todo: auto always send data to redis (done)
-# todo: check if dix exists in redis, and stop parsing if it exists. 
+# todo: check if dix exists in redis, and stop parsing if it exists.
+# todo: extract 'Genre Categorieën' , upper page
+# todo: create postgres tables with sqlalchemy
+# todo: make async? 
 # ldata = list(works_data.items())
 # dcount = extract_download_count(Id=ldata[1000][0], data=works_data)
 def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_download_entries') -> dict:
@@ -208,14 +256,10 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
     # breakpoint()
     url = data[Id]['permlink']
     r = manager.request('GET', url)
-    soup = bs.BeautifulSoup(r.data)
-    # a_title = 'Special:GetFCtrStats' # /
-    # ahrefs = soup('a', href=True)
+    soup = bs.BeautifulSoup(r.data, "html.parser")
+    metadata = parse_metadata_table(soup)
+    logger.info(f"{metadata=}")
 
-    # is there a quicker way of doing this?
-    # ahref_title_matches = [a for a in ahrefs if a.get('title', '').startswith(a_title)]
-
-    # better?
     # breakpoint()
     info_matches = soup.find_all(attrs={'class': 'we_file_info2'})
     url_matches = soup.find_all(attrs={'class': 'external text'})
@@ -231,34 +275,13 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
                 d[i]['title'] = Id 
                 d[i]['itemno'] = i 
                 d[i]['parent'] = data[Id]['parent'].replace('Category:','')
+                d[i]['parent_meta'] = metadata # todo: should eventually become psql table, so that metadata gets saved only once for the parent
 
                 # ugly, but for now, save here to redis
                 rcon.r.zadd(redisKey, {json.dumps(d[i]): rix})
     else:
         logger.warning(f"{len(info_matches)=} != {len(urls)=}")
-    
-    # ahref_title_matches = soup.find_all(lambda tag: tag.name =='a' and tag.get('title', '').startswith(a_title))
-
-    # lahref = len(ahref_title_matches)
-    # # multiple matches: just create a list, and later a dict, look up the version names
-    # # assert (lahref := len(ahref_title_matches)) <= 1, f"{lahref=:<4} > 1. {Id=}"
-
-    # if lahref == 0: 
-    #     logger.warning(f'no download count found for {Id}')
-
-    # # dcounts = []
-    # # for every match, try to extract the download count
-    # for m in ahref_title_matches:
-    #     # m = ahref_title_matches[0]
-    #     dcount = m.text  
-
-    #     try:
-    #         dcount = int(dcount)
-
-    #     except Exception as e:
-    #         logger.error(f'cannot parse download count text: {dcount}, {Id=} {str(e)=}')
-
-    #     dcounts.append(dcount)
+        error_cnt['nurl_unequal_to_ninfo'] += 1
 
     return d
 
@@ -288,17 +311,33 @@ async def aextract_download_count(id=None, data=None):
 
     raise NotImplementedError
 
-def dcounts_to_df(dcounts: Dict[str, Dict[int, dict]]):
+# df = dcounts_to_df(dcounts)
+# df = dcounts_to_df(data)
+def dcounts_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], sortBy=None):
+
     tuples, vals = [], []
-    for k,v in dcounts.items():
-        for l, row in v.items():
-            tuples.append((k, l))
-            vals.append(row)
-            # print(f"{k} {l}")
+    if isinstance(dcounts, dict):
+        for k,v in dcounts.items():
+            for l, row in v.items():
+                tuples.append((k, l))
+                vals.append(row)
+                # print(f"{k} {l}")
+
+    elif isinstance(dcounts, list):
+        tuples = [(v['title'], v['itemno']) for v in dcounts]
+        vals = dcounts
 
     df = pd.DataFrame(vals)
     mix = pd.MultiIndex.from_tuples(tuples)
     df.index = mix
+
+    # try to make columns neater, or return df
+    df['ndownload'] = df['ndownload'].astype(float)
+    df['npage'] = df['npage'].astype(float)
+
+    if sortBy is not None:
+        assert sortBy in df.columns, f"{sortBy=} not in cols={list(df.columns)}"
+        df = df.sort_values(sortBy, ascending=False)
 
     return df
 
