@@ -8,11 +8,12 @@
         ipy get_works_list.py -i
 """
 
-from typing import Dict, Tuple, List, Any, Union, Optional, Callable
+from typing import Dict, Tuple, List, Any, Union, Callable # , Optional
 import random
 import logging
 # from time import sleep
 import sys
+import re
 from itertools import chain
 from collections import defaultdict
 from datetime import datetime
@@ -21,7 +22,6 @@ import asyncio
 from urllib3 import PoolManager # , request
 import bs4 as bs
 import aiohttp
-import re
 from yapic import json
 import tqdm
 import pandas as pd
@@ -50,17 +50,17 @@ manager = PoolManager(10)
 id_remap = lambda x: x.replace('Category:','')
 error_cnt = defaultdict(int)
 
-def parse_row(row: dict, id_remap: Callable=id_remap) -> dict:
+def parse_row(row: dict, id_remap_: Callable=id_remap) -> dict:
     try:
         if id_remap is not None and 'id' in row:
-            row['id'] = id_remap(row['id'])
+            row['id'] = id_remap_(row['id'])
 
     except Exception as e: 
         logger.error(f'cannot parse row dict. {e=!r}')   
 
     return row
 
-def get_imslp(api_type=2, max_pages=None, id_remap: Callable=id_remap) -> Dict[str, Dict[str, Any]]:
+def get_imslp(api_type=2, max_pages=None, id_remap_: Callable=id_remap) -> Dict[str, Dict[str, Any]]:
     """ get 'people' (api_type=1) and/or 'works' (api_type=2) from IMSLP API 
 
         they define 'people' as composer, performers, editors, etc. 
@@ -89,7 +89,7 @@ def get_imslp(api_type=2, max_pages=None, id_remap: Callable=id_remap) -> Dict[s
             logger.error(f'cannot parse json data to dict. {str(e)=}')
 
         # breakpoint()
-        jsond = {k: parse_row(d) for k,d in jsond.items()}      
+        jsond = {k: parse_row(d, id_remap_=id_remap_) for k,d in jsond.items()}      
         # breakpoint()
 
         # change ids to string ids: Category:Barbosa, Domingos Caldas
@@ -252,7 +252,7 @@ def parse_metadata_table(text):
 # todo: make async? 
 # ldata = list(works_data.items())
 # dcount = extract_download_count(Id=ldata[1000][0], data=works_data)
-def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_download_entries') -> dict:
+def extract_download_count(Id=None, data=None) -> dict:
     """ extract download count from imslp html page
 
         id          title id from the HashablePageRecord, e.g. 'Polish Songs, Op.74 (Chopin, Frédéric)'
@@ -328,18 +328,18 @@ def extract_dcounts(data: dict, ids=None, n=100, mininterval=9, debug_invl=50):
     elif ids is None and n is None:
         ids = list(data.keys())
 
-    dcounts = dict()
+    ret = dict()
 
     # todo: make async using aiohttp
     for i, id_ in enumerate(tqdm.tqdm(ids, mininterval=mininterval)):
         if i > 0 and i%debug_invl == 0:
             logger.info(f"error_cnt: {dict(error_cnt)}")
 
-        dcounts[id_] = extract_download_count(Id=id_, data=data)
+        ret[id_] = extract_download_count(Id=id_, data=data)
 
-    return dcounts
+    return ret
 
-async def aextract_download_count(id=None, data=None):
+async def aextract_download_count(id_=None, data=None):
     """ extract download count asynchronously from imlsp html page using aiohttp """
 
     raise NotImplementedError
@@ -537,9 +537,9 @@ if __name__ == "__main__":
     # skip existing titles?
     if args.skipExistingTitles:
         # get titles collected in redis
-        data = get_multi_zset('imslp_download_entries')
-        df = dcounts_to_df(data)
-        titles = set(df.title.values)
+        rdata = get_multi_zset('imslp_download_entries')
+        bdf = dcounts_to_df(rdata)
+        titles = set(bdf.title.values)
 
         # filter out existing titles
         all_titles = set(wdata.keys())
