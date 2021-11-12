@@ -130,8 +130,8 @@ def get_redis(key: str) -> Dict[str, Dict[str, Any]]:
     d = rcon.r.get(key)
     return json.loads(d)
 
-# data = get_multi_zset('imslp_download_entries')
-# data = get_multi_zset('imslp_raw_html')
+# rdata = get_multi_zset('imslp_download_entries')
+# rdata = get_multi_zset('imslp_raw_html')
 def get_multi_zset(key: str) -> List[Dict[str, Any]]:
 
     res = rcon.r.zrevrangebyscore(key, '+inf', '-inf')
@@ -300,17 +300,13 @@ def extract_all_items(Id=None, data=None) -> dict:
     boxes = sheetmusicSection.find_all(attrs={'class': 'we'})
     info_matches = [box.find(attrs={'class': 'we_file_download plainlinks'}) for box in boxes]
     info_matches = list(filter(lambda x: x is not None, info_matches))
-    
+
     if len(info_matches) == 0:
         return
 
     # logger.info(f"{info_matches=}")
 
     # breakpoint()
-    # info_matches = sheetmusicSection.find_all(attrs={'class': 'we_file_info2'})
-    # info_matches = [box.find(attrs={'class': 'we_file_download plainlinks'}) for box in infoBoxes]
-    # url_matches = sheetmusicSection.find_all(attrs={'class': 'external text'})
-    # urls = [u.attrs['href'] for u in url_matches if 'https://imslp.org/wiki/Speci' in u.attrs['href']]
     d = {i: span_info.text for i, span_info in enumerate(info_matches)}
     d = {i: regex_parse_fields(v) for i,v in d.items()}
 
@@ -318,11 +314,6 @@ def extract_all_items(Id=None, data=None) -> dict:
     for i, box in enumerate(boxes):
         error_cnt['parsecount'] += 1
 
-        # if len(urls) == len(info_matches):
-        #     d[i]['url'] = urls[i]
-        # else:
-        #     logger.warning(f"{len(info_matches)=} != {len(urls)=}")
-        #     error_cnt['nurl_unequal_to_ninfo'] += 1
         url = box.find(attrs={'class': 'external text'}).attrs['href']
         findRix= re.findall(r"/(\d+)$", url) # rangeindex from imslp
         if len(findRix) == 1:
@@ -380,9 +371,10 @@ def extract_dict_keys(row) -> List[str]:
 
     return []
 
+# rdata = get_multi_zset('imslp_download_entries')
 # df = rdata_to_df(dcounts)
-# df = rdata_to_df(data, renameDict={'parent_meta':'meta'}, sortBy='scrapeDate')
-# df = rdata_to_df(data)
+# df = rdata_to_df(rdata, renameDict={'parent_meta':'meta'}, sortBy='scrapeDate')
+# df = rdata_to_df(rdata)
 # withmeta = df[~df.parent_meta.isnull()]
 def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDict=None, sortBy=None):
 
