@@ -8,11 +8,13 @@
         ipy get_works_list.py -i
 """
 
-from typing import Dict, List, Any, Union, Optional, Callable
+from typing import Dict, Tuple, List, Any, Union, Optional, Callable
 import random
 import logging
 # from time import sleep
+from itertools import chain
 from collections import defaultdict
+from datetime import datetime
 import argparse
 import asyncio
 from urllib3 import PoolManager # , request
@@ -39,6 +41,7 @@ rcon = rs(home=0, db=4, decode=0)
 retformat = 'json'
 api_imslp = "http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type={}/start={}/retformat={}"
 redisKey = 'imslp_download_entries'
+scrapeVersion = 2
 
 manager = PoolManager(10)
 id_remap = lambda x: x.replace('Category:','')
@@ -276,6 +279,8 @@ def extract_download_count(Id=None, composer=None, data=None, redisKey='imslp_do
                 d[i]['itemno'] = i 
                 d[i]['parent'] = data[Id]['parent'].replace('Category:','')
                 d[i]['parent_meta'] = metadata # todo: should eventually become psql table, so that metadata gets saved only once for the parent
+                d[i]['version'] = scrapeVersion
+                d[i]['scrapeDate'] = datetime.utcnow()
 
                 # ugly, but for now, save here to redis
                 rcon.r.zadd(redisKey, {json.dumps(d[i]): rix})
@@ -311,8 +316,15 @@ async def aextract_download_count(id=None, data=None):
 
     raise NotImplementedError
 
+def extract_dict_keys(row):
+    if isinstance(row, dict):
+        return list(row.keys())
+
+    return []
+
 # df = dcounts_to_df(dcounts)
 # df = dcounts_to_df(data)
+# withmeta = df[~df.parent_meta.isnull()]
 def dcounts_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], sortBy=None):
 
     tuples, vals = [], []
@@ -334,12 +346,30 @@ def dcounts_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], sortBy
     # try to make columns neater, or return df
     df['ndownload'] = df['ndownload'].astype(float)
     df['npage'] = df['npage'].astype(float)
+    df['parent_meta_keys'] = df.parent_meta.map(extract_dict_keys)
+
+    # todo: if duplicate urls exist, drop the one without parent_metadata
+    # todo: or use a version number? And prefer the highest version
+    # todo: collaps metadata dict to new columns, what value to use as null placeholder?
 
     if sortBy is not None:
         assert sortBy in df.columns, f"{sortBy=} not in cols={list(df.columns)}"
         df = df.sort_values(sortBy, ascending=False)
 
     return df
+
+# labs = unique_meta_categories(df)
+def unique_meta_categories(df) -> Tuple[str]:
+    """ extract unique categories from category metadata 
+        mostly looks like:
+            ['Composition Year', 'Incipit', 'Genre Categories', "Movements/SectionsMov'ts/Sec's", 'First Publication', 'Related Works'] 
+    """
+    assert isinstance(df, pd.DataFrame)
+
+    ll = list(df.parent_meta_keys.values)
+    unq = set(chain.from_iterable(ll))
+
+    return tuple(unq)
 
 async def fetch(session, url) -> Dict[str, str]:
     
@@ -417,6 +447,12 @@ class ArgParser():
           help="scrape imslp downloadable items and save to redis"
         )
         CLI.add_argument(
+          "--skipExistingTitles", 
+          action='store_true',         
+          default=False,
+          help="first check which titles are already scraped, and scrape new titles first"
+        )
+        CLI.add_argument(
           "--nrow", 
           type=str,
           default=None,
@@ -437,10 +473,10 @@ if __name__ == "__main__":
     set_log_level(logger, level=log_level, fmt=LOG_FMT)
 
     try: 
-        data
+        wdata
     except NameError:
         # data = get_redis('imslp_people_data')
-        data = get_redis('imslp_works_data')
+        wdata = get_redis('imslp_works_data')
 
         logger.info(f'got redis data, now running ')
 
@@ -457,6 +493,25 @@ if __name__ == "__main__":
             nrows = int(nrows)
             logger.info(f"will parse {nrows=:,}")
         else:
-            logger.info(f"will parse all {len(data)=:,} rows")
+            logger.info(f"will parse all {len(wdata)=:,} rows")
 
-        dcounts = extract_dcounts(data, ids=None, n=nrows)
+        # skip existing titles?
+        if args.skipExistingTitles:
+            # get titles collected in redis
+            data = get_multi_zset('imslp_download_entries')
+            df = dcounts_to_df(data)
+            titles = set(df.title.values)
+
+            # filter out existing titles
+            all_titles = set(wdata.keys())
+            unscraped_titles = all_titles - titles
+
+            logger.info(f"{len(all_titles)=:,} {len(unscraped_titles)=:,}")
+
+            to_scrape = {k: v for k,v in wdata.items() if k in unscraped_titles}
+            logger.info(f"no titles to scrape: {len(to_scrape):,}")
+
+        else:
+            to_scrape = wdata
+
+        dcounts = extract_dcounts(to_scrape, ids=None, n=nrows)
