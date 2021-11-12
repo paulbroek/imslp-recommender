@@ -288,9 +288,12 @@ def extract_all_items(Id=None, data=None) -> dict:
     r = manager.request('GET', url)
     soup = bs.BeautifulSoup(r.data, "html.parser")
     metadata = parse_metadata_table(soup)
+    logger.debug(f"{metadata=}")
     # sheetmusicSection = soup # now you will also scrape recordings, mind this. 
     sheetmusicSection = soup.find(attrs={'id': 'wpscoresection'})
-    logger.debug(f"{metadata=}")
+    if sheetmusicSection is None:
+        logger.warning(f"this work has no sheet music items: {Id}")
+        return
 
     # breakpoint()
     info_matches = sheetmusicSection.find_all(attrs={'class': 'we_file_info2'})
@@ -346,7 +349,9 @@ def scrape_all_works(data: dict, ids=None, n=100, mininterval=9, debug_invl=50):
         if i > 0 and i%debug_invl == 0:
             logger.info(f"error_cnt: {dict(error_cnt)}")
 
-        ret[id_] = extract_all_items(Id=id_, data=data)
+        res = extract_all_items(Id=id_, data=data)
+        if res is not None:
+            ret[id_] = res
 
     return ret
 
