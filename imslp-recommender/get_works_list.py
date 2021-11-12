@@ -254,7 +254,7 @@ def parse_metadata_table(text):
 # todo: scrape the 'Arrangements and Transcriptions' page as well. Click on it, or?
 # ldata = list(works_data.items())
 # dcount = extract_all_items(Id=ldata[1000][0], data=works_data)
-def extract_all_items(Id=None, data=None) -> dict:
+async def extract_all_items(Id=None, data=None) -> dict:
     """ parse all items on a Works page
 
         id          title id from the HashablePageRecord, e.g. 'Polish Songs, Op.74 (Chopin, Frédéric)'
@@ -281,6 +281,10 @@ def extract_all_items(Id=None, data=None) -> dict:
     assert data is not None
 
     assert isinstance(data, dict)
+
+    if rcon.aior[REDIS_DB] is None:            
+        rcon._aior_connect(REDIS_DB)
+
     # download counts are stored in /wiki/Special:GetFCtrStats/@{ID}
     # try to extract using beautifulsoup, inside the <a> tag
 
@@ -335,10 +339,10 @@ def extract_all_items(Id=None, data=None) -> dict:
             d[i]['scrapeDate'] = datetime.utcnow()
 
             # ugly, but for now, save here to redis
-            rcon.r.zadd(redisKey, {json.dumps(d[i]): rix})
-            rcon.r.zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix})
-            # await rcon.aior[REDIS_DB].zadd(redisKey, {json.dumps(d[i]): rix})
-            # await rcon.aior[REDIS_DB].zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix}) # rcon.r.zadd
+            # rcon.r.zadd(redisKey, {json.dumps(d[i]): rix})
+            # rcon.r.zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix})
+            await rcon.aior[REDIS_DB].zadd(redisKey, {json.dumps(d[i]): rix})
+            await rcon.aior[REDIS_DB].zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix}) # rcon.r.zadd
 
         else:
             logger.warning(f"{len(findRix)=} != 1")
@@ -346,7 +350,7 @@ def extract_all_items(Id=None, data=None) -> dict:
     return d
 
 # dcounts = scrape_all_works(data, ids=None, n=100)
-def scrape_all_works(data: dict, ids=None, n=100, mininterval=9, debug_invl=50):
+async def scrape_all_works(data: dict, ids=None, n=100, mininterval=9, debug_invl=50):
     """ extract a batch of download counts, using a random sample """
 
     # test on a sample of ids
@@ -362,7 +366,7 @@ def scrape_all_works(data: dict, ids=None, n=100, mininterval=9, debug_invl=50):
         if i > 0 and i%debug_invl == 0:
             logger.info(f"error_cnt: {dict(error_cnt)}")
 
-        res = extract_all_items(Id=id_, data=data)
+        res = await extract_all_items(Id=id_, data=data)
         if res is not None:
             ret[id_] = res
 
@@ -540,9 +544,6 @@ if __name__ == "__main__":
     bs4version = bs.__version__
     logger.info(f"running imslp parser. {args=} \n{bs4version=} ")
 
-    # res = asyncio.run(ascrape_all_works(data, ids=None, n=5))
-    # logger.info(f'{len(res)=}')
-
     if args.dryrun:
         sys.exit()
 
@@ -553,6 +554,9 @@ if __name__ == "__main__":
         wdata = get_redis('imslp_works_data')
 
         logger.info(f'got redis data, now running ')
+
+    # res = asyncio.run(ascrape_all_works(wdata, ids=None, n=5))
+    # logger.info(f'{len(res)=}')
 
     nrows = args.nrow
     # nrows = 100_000
@@ -583,4 +587,5 @@ if __name__ == "__main__":
     else:
         to_scrape = wdata
 
-    dcounts = scrape_all_works(to_scrape, ids=None, n=nrows)
+    # dcounts = scrape_all_works(to_scrape, ids=None, n=nrows)
+    dcounts = asyncio.run(scrape_all_works(to_scrape, ids=None, n=nrows))
