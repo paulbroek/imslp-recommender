@@ -314,10 +314,18 @@ def extract_all_items(Id=None, data=None) -> dict:
     for i, box in enumerate(boxes):
         error_cnt['parsecount'] += 1
 
-        url = box.find(attrs={'class': 'external text'}).attrs['href']
-        findRix= re.findall(r"/(\d+)$", url) # rangeindex from imslp
+        # downloadUrl = ''
+        downloadDiv = box.find(attrs={'class': 'external text'})
+        if 'href' not in downloadDiv.attrs:
+            logger.warning(f"attr 'href' not in downloadDiv, cannot extract downloadUrl. {Id=}")
+            error_cnt["cannot extract downloadUrl"] += 1
+            return
+        else:
+            downloadUrl = downloadDiv.attrs['href']
+
+        findRix= re.findall(r"/(\d+)$", downloadUrl) # rangeindex from imslp
         if len(findRix) == 1:
-            d[i]['url'] = url
+            d[i]['url'] = downloadUrl
             d[i]['rix'] = rix = int(findRix[0])
             d[i]['title'] = Id 
             d[i]['itemno'] = i 
