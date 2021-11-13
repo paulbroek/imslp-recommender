@@ -344,7 +344,8 @@ async def extract_all_items(Id=None, data=None) -> dict:
             # rcon.r.zadd(redisKey, {json.dumps(d[i]): rix})
             # rcon.r.zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix})
             await rcon.aior[REDIS_DB].zadd(redisKey, {json.dumps(d[i]): rix})
-            await rcon.aior[REDIS_DB].zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix}) # rcon.r.zadd
+            if args.saveRaw:
+                await rcon.aior[REDIS_DB].zadd(redisKeyRawSoup, {json.dumps(str(soup)): rix}) # rcon.r.zadd
 
         else:
             logger.warning(f"{len(findRix)=} != 1")
@@ -515,10 +516,10 @@ class ArgParser():
           help=f"choose debug log level: {', '.join(loggingLevelNames())}"
         )
         CLI.add_argument(
-          "-s", "--save", 
+          "-s", "--saveRaw", 
           action='store_true',         
-          default=True,
-          help="save results to redis"
+          default=False,
+          help="save raw html pages to redis (uses a lot of memory)"
         )
         CLI.add_argument(
           "--dryrun", 
