@@ -583,7 +583,7 @@ if __name__ == "__main__":
     if args.skipExistingTitles:
         # get titles collected in redis
         rdata = get_multi_zset('imslp_download_entries')
-        metaCols, bdf = rdata_to_df(rdata)
+        metaCols, bdf = rdata_to_df(rdata, renameDict={'parent_meta':'meta'})
         titles = set(bdf.title.values)
 
         # filter out existing titles
