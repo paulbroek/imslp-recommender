@@ -3,6 +3,9 @@
     
     load scraped data from redis and apply some data science to it
 
+    conda activate py39
+    ipy explore.py -i
+
 """
 import random
 from collections import defaultdict
@@ -11,7 +14,7 @@ import pandas as pd
 from get_works_list import get_multi_zset, rdata_to_df, unique_nested_lists
 
 rdata = get_multi_zset('imslp_download_entries')
-metaCols, df = rdata_to_df(rdata, renameDict={'parent_meta':'meta'}, sortBy='ndownload') # scrapeDate
+metaCols, df = rdata_to_df(rdata, renameDict={'parent_meta':'meta'}, sortBy='ndownload', unnestCols=True) # scrapeDate
 
 view = df[['partial','parts','size','npage','rix','title','itemno','ndownload','version']]
 

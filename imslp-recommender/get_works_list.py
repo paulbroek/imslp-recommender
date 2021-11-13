@@ -391,7 +391,7 @@ def extract_dict_keys(row) -> List[str]:
 # metaCols, df = rdata_to_df(rdata, renameDict={'parent_meta':'meta'}, sortBy='scrapeDate')
 # metaCols, df = rdata_to_df(rdata)
 # withmeta = df[~df.parent_meta.isnull()]
-def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDict=None, sortBy=None) -> Tuple[List[str], pd.DataFrame]:
+def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDict=None, sortBy=None, unnestCols=False) -> Tuple[List[str], pd.DataFrame]:
 
     tuples, vals = [], []
     if isinstance(dcounts, dict):
@@ -428,10 +428,13 @@ def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDi
         assert sortBy in df.columns, f"{sortBy=} not in cols={list(df.columns)}"
         df = df.sort_values(sortBy, ascending=False)
 
-    # unnest meta dict to new columns
-    metaKeys = unique_nested_lists(df)
-    ul = [(renameDict['parent_meta'], i) for i in metaKeys] if 'parent_meta' in renameDict else [('parent_meta', i) for i in metaKeys]
-    addedCols, df = unnest_assign_cols(df, ul)
+    addedCols = []
+    if unnestCols:
+        # unnest meta dict to new columns
+        metaKeys = unique_nested_lists(df)
+        ul = [(renameDict['parent_meta'], i) for i in metaKeys] if 'parent_meta' in renameDict else [('parent_meta', i) for i in metaKeys]
+        addedCols, df = unnest_assign_cols(df, ul)
+        
     logger.info(f"added {len(addedCols)=:,} cols")
 
     return addedCols, df
