@@ -31,11 +31,12 @@ import timeago
 # easy for filtering out composers
 # import imslp # https://github.com/jlumbroso/imslp
 
-from rarc.utils.misc import chainGatherRes
+from rarc.utils.misc import chainGatherRes, unnest_dict, unnest_assign_cols
 from rarc.utils.log import setup_logger, set_log_level, loggingLevelNames
 from rarc.redis_conn import rs
 
 LOG_FMT = "%(asctime)s - %(module)-16s - %(lineno)-4s - %(funcName)-22s - %(levelname)-7s - %(message)s"  # title
+logger = logging.getLogger(__name__)
 
 # create a new db to save al 36_000 categories in
 REDIS_DB = 4
@@ -252,6 +253,7 @@ def parse_metadata_table(text):
 # todo: create postgres tables with sqlalchemy
 # todo: make async? 
 # todo: scrape the 'Arrangements and Transcriptions' page as well. Click on it, or?
+# todo: get popular categories, by running groupby on download count with categories
 # ldata = list(works_data.items())
 # dcount = extract_all_items(Id=ldata[1000][0], data=works_data)
 async def extract_all_items(Id=None, data=None) -> dict:
@@ -384,11 +386,11 @@ def extract_dict_keys(row) -> List[str]:
     return []
 
 # rdata = get_multi_zset('imslp_download_entries')
-# df = rdata_to_df(dcounts)
-# df = rdata_to_df(rdata, renameDict={'parent_meta':'meta'}, sortBy='scrapeDate')
-# df = rdata_to_df(rdata)
+# metaCols, df = rdata_to_df(dcounts)
+# metaCols, df = rdata_to_df(rdata, renameDict={'parent_meta':'meta'}, sortBy='scrapeDate')
+# metaCols, df = rdata_to_df(rdata)
 # withmeta = df[~df.parent_meta.isnull()]
-def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDict=None, sortBy=None):
+def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDict=None, sortBy=None) -> Tuple[List[str], pd.DataFrame]:
 
     tuples, vals = [], []
     if isinstance(dcounts, dict):
@@ -425,17 +427,26 @@ def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDi
         assert sortBy in df.columns, f"{sortBy=} not in cols={list(df.columns)}"
         df = df.sort_values(sortBy, ascending=False)
 
-    return df
+    # unnest meta dict to new columns
+    metaKeys = unique_nested_lists(df)
+    ul = [(renameDict['parent_meta'], i) for i in metaKeys] if 'parent_meta' in renameDict else [('parent_meta', i) for i in metaKeys]
+    addedCols, df = unnest_assign_cols(df, ul)
+    logger.info(f"added {len(addedCols)=:,} cols")
 
-# labs = unique_meta_categories(df)
-def unique_meta_categories(df) -> Tuple[str]:
-    """ extract unique categories from category metadata 
+    return addedCols, df
+
+# labs = unique_nested_lists(df)
+# cats = unique_nested_lists(df, df[[(col:='meta_Genre Categories)]].dropna(), col=col)
+# old records miss metadata values, use dropna before passing dataframe to this method
+def unique_nested_lists(df, col='parent_meta_keys') -> Tuple[str]:
+    """ extract unique items from a column of nested lists
         mostly looks like:
             ['Composition Year', 'Incipit', 'Genre Categories', "Movements/SectionsMov'ts/Sec's", 'First Publication', 'Related Works'] 
     """
     assert isinstance(df, pd.DataFrame)
+    assert col in df.columns, f"{col=} not in cols={list(df.columns)}"
 
-    ll = list(df.parent_meta_keys.values)
+    ll = list(df[col].values)
     unq = set(chain.from_iterable(ll))
 
     return tuple(unq)
@@ -572,7 +583,7 @@ if __name__ == "__main__":
     if args.skipExistingTitles:
         # get titles collected in redis
         rdata = get_multi_zset('imslp_download_entries')
-        bdf = rdata_to_df(rdata)
+        metaCols, bdf = rdata_to_df(rdata)
         titles = set(bdf.title.values)
 
         # filter out existing titles
