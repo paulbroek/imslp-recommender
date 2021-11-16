@@ -44,7 +44,8 @@ rcon = rs(home=0, db=REDIS_DB, decode=0)
 
 retformat = 'json'
 api_imslp = "http://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type={}/start={}/retformat={}"
-redisKey = 'imslp_download_entries'
+# redisKey = 'imslp_download_entries'
+redisKey = 'imslp_download_entries2'
 redisKeyRawSoup = 'imslp_raw_html'
 scrapeVersion = 6
 
