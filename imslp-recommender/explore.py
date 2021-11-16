@@ -11,7 +11,12 @@ import random
 from collections import defaultdict
 import pandas as pd
 
-from get_works_list import get_multi_zset, rdata_to_df, unique_nested_lists
+from get_works_list import get_multi_zset, save_multi_zset, rdata_to_df, unique_nested_lists
+from rarc.redis_conn import rs
+
+# create a new db to save al 36_000 categories in
+REDIS_DB = 4
+rcon = rs(home=0, db=REDIS_DB, decode=0)
 
 rdata = get_multi_zset('imslp_download_entries')
 metaCols, df = rdata_to_df(rdata, renameDict={'parent_meta':'meta'}, sortBy='ndownload', unnestCols=True) # scrapeDate
@@ -35,7 +40,7 @@ catDict = dict(zip(factors, labs)) # maps int to str label
 catDictRev = dict(zip(labs, factors))
 
 def catListToFactors(item):
-    return set([catDictRev[x] for x in item])
+    return set(catDictRev[x] for x in item)
 
 def factorsToStr(item) -> str: 
     """ create one comma-separated string, so factors can be extracted using regex """
@@ -53,7 +58,7 @@ catCount = defaultdict(int)
 # slow
 for cat in factors: # cats
     # catCount[cat] = bdf[col].map(lambda x: hasCat(x, cat)).sum()
-    catCount[cat] = bdf['catFactors'].map(lambda x: hasCat(x, cat)).sum()
+    catCount[cat] = bdf['catFactors'].map(lambda x, cat_=cat: hasCat(x, cat_)).sum()
 
 s = pd.Series(catCount).sort_values(ascending=False)
 print(f"popular categories: \n\n", s.head(30))

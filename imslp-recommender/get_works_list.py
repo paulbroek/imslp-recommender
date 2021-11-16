@@ -137,7 +137,13 @@ def get_multi_zset(key: str) -> List[Dict[str, Any]]:
 
     res = rcon.r.zrevrangebyscore(key, '+inf', '-inf')
 
-    return [json.loads(d) for d in res]
+    return [dict(rawdata=d, **json.loads(d)) for d in res]
+
+def save_multi_zset(key: str, items: List[dict], mininterval=1) -> None:
+
+    for i, item in enumerate(tqdm.tqdm(items, mininterval=mininterval)):
+
+        rcon.r.zadd(key, {item['rawdata']: item['rix']})
 
 def remove_older_versions_redis(key: str):
     """ get all rows from redis, but remove entries that have multiple values, only keep the newest row """
@@ -391,7 +397,7 @@ def extract_dict_keys(row) -> List[str]:
 # metaCols, df = rdata_to_df(rdata, renameDict={'parent_meta':'meta'}, sortBy='scrapeDate')
 # metaCols, df = rdata_to_df(rdata)
 # withmeta = df[~df.parent_meta.isnull()]
-def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDict=None, sortBy=None, unnestCols=False) -> Tuple[List[str], pd.DataFrame]:
+def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDict=None, sortBy=None, includeJson=True, unnestCols=False) -> Tuple[List[str], pd.DataFrame]:
 
     tuples, vals = [], []
     if isinstance(dcounts, dict):
@@ -427,6 +433,9 @@ def rdata_to_df(dcounts: Union[List[dict], Dict[str, Dict[int, dict]]], renameDi
     if sortBy is not None:
         assert sortBy in df.columns, f"{sortBy=} not in cols={list(df.columns)}"
         df = df.sort_values(sortBy, ascending=False)
+
+    if not includeJson:
+        del df['rawdata']
 
     addedCols = []
     if unnestCols:
