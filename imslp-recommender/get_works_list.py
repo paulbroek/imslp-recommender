@@ -567,7 +567,7 @@ if __name__ == "__main__":
     set_log_level(logger, level=log_level, fmt=LOG_FMT)
 
     bs4version = bs.__version__
-    logger.info(f"running imslp parser. {args=} \n{bs4version=} ")
+    logger.info(f"running imslp parser. {args=} \n{bs4version=}")
 
     if args.dryrun:
         sys.exit()
